@@ -17,12 +17,13 @@ module Grape
         return if disable?
         return unless throttle?
 
-        if allowed?
-          update_counter
-          set_rate_limit_headers
-        else
+        allowed, request_count = counter.test_and_set
+
+        unless allowed
           fail ::Grape::Attack::RateLimitExceededError.new("API rate limit exceeded for #{request.client_identifier}.")
         end
+
+        set_rate_limit_headers(request_count)
       end
 
       private
@@ -35,22 +36,13 @@ module Grape
         request.throttle?
       end
 
-      def allowed?
-        counter.value < max_requests_allowed
-      end
-
-      def update_counter
-        counter.update
-      end
-
-      def set_rate_limit_headers
-        request.context.route_setting(:throttle)[:remaining] = [0, max_requests_allowed - (counter.value + 1)].max
+      def set_rate_limit_headers(request_count)
+        request.context.route_setting(:throttle)[:remaining] = [0, max_requests_allowed - request_count].max
       end
 
       def max_requests_allowed
         request.throttle_options.max.to_i
       end
-
     end
   end
 end
