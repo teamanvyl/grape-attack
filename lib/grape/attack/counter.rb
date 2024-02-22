@@ -9,32 +9,27 @@ module Grape
         @adapter = adapter
       end
 
-      def value
+      def test_and_set
         @value ||= begin
-          adapter.get(key).to_i
+          adapter.test_and_set(key, max_requests_allowed, ttl_in_seconds)
         rescue ::Grape::Attack::StoreError
-          1
+          [1, 1]
         end
-      end
-
-      def update
-        adapter.atomically do
-          adapter.incr(key)
-          adapter.expire(key, ttl_in_seconds)
-        end
-      rescue ::Grape::Attack::StoreError
       end
 
       private
 
+      def max_requests_allowed
+        request.throttle_options.max.to_i
+      end
+
       def key
-        "#{request.method}:#{request.path}:#{request.client_identifier}"
+        request.client_identifier.to_s
       end
 
       def ttl_in_seconds
         request.throttle_options.per.to_i
       end
-
     end
   end
 end
